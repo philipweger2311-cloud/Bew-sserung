@@ -52,6 +52,16 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             transition: background-color 0.2s ease;
         }
+        .wiese-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .timer-text {
+            font-size: 15px;
+            font-weight: normal;
+            opacity: 0.9;
+        }
         /* Deine gewünschten Farben */
         .status-aus { background-color: #808080; } /* Grau */
         .status-an { background-color: #007bff; }  /* Blau */
@@ -90,7 +100,8 @@
             const input = document.getElementById('newWieseName');
             const name = input.value.trim();
             if (name !== "") {
-                wiesen.push({ id: Date.now(), name: name, isOn: false });
+                // startedAt speichert den Einschalt-Zeitpunkt
+                wiesen.push({ id: Date.now(), name: name, isOn: false, startedAt: null });
                 input.value = "";
                 speichern();
             }
@@ -100,12 +111,14 @@
             const wiese = wiesen.find(w => w.id === id);
             if (wiese) {
                 wiese.isOn = !wiese.isOn;
+                // Wenn eingeschaltet wird, merken wir uns JETZT die Zeit. Wenn aus, löschen wir sie wieder.
+                wiese.startedAt = wiese.isOn ? Date.now() : null;
                 speichern();
             }
         }
 
         function deleteWiese(event, id) {
-            event.stopPropagation(); // Verhindert, dass beim Löschen versehentlich umgeschaltet wird
+            event.stopPropagation(); 
             if(confirm("Wiese wirklich löschen?")) {
                 wiesen = wiesen.filter(w => w.id !== id);
                 speichern();
@@ -119,24 +132,67 @@
             wiesen.forEach(wiese => {
                 const div = document.createElement('div');
                 div.className = `wiese-item ${wiese.isOn ? 'status-an' : 'status-aus'}`;
-                // Tippen auf den Balken ändert den Status
                 div.onclick = () => toggleStatus(wiese.id);
 
-                const textSpan = document.createElement('span');
-                textSpan.innerText = `${wiese.name} (${wiese.isOn ? 'AN' : 'AUS'})`;
+                // Container für Text und Timer untereinander
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'wiese-info';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.innerText = wiese.name;
+                infoDiv.appendChild(nameSpan);
+
+                const statusSpan = document.createElement('span');
+                statusSpan.className = 'timer-text';
+                
+                if (wiese.isOn && wiese.startedAt) {
+                    // Markierung für das Live-Update per JavaScript
+                    statusSpan.innerHTML = `AN • läuft seit: <span class="live-timer" data-start="${wiese.startedAt}">00:00:00</span>`;
+                } else {
+                    statusSpan.innerText = 'AUS';
+                }
+                infoDiv.appendChild(statusSpan);
 
                 const delBtn = document.createElement('button');
                 delBtn.className = 'delete-btn';
                 delBtn.innerText = 'Löschen';
                 delBtn.onclick = (e) => deleteWiese(e, wiese.id);
 
-                div.appendChild(textSpan);
+                div.appendChild(infoDiv);
                 div.appendChild(delBtn);
                 liste.appendChild(div);
             });
+            
+            // Sofort einmal die Timer berechnen, falls welche aktiv sind
+            updateLiveTimers();
         }
 
-        // Beim ersten Öffnen die Liste anzeigen
+        // Funktion, die sekündlich alle aktiven Timer hochzählt
+        function updateLiveTimers() {
+            const activeTimers = document.querySelectorAll('.live-timer');
+            activeTimers.forEach(timer => {
+                const startZeit = parseInt(timer.getAttribute('data-start'));
+                const jetzt = Date.now();
+                const unterschied = jetzt - startZeit;
+
+                // Umrechnung in Stunden, Minuten und Sekunden
+                const stunden = Math.floor(unterschied / 3600000);
+                const minuten = Math.floor((unterschied % 3600000) / 60000);
+                const sekunden = Math.floor((unterschied % 60000) / 1000);
+
+                // Schön formatieren mit führenden Nullen (z.B. 01:23:05)
+                const fStunden = stunden.toString().padStart(2, '0');
+                const fMinuten = minuten.toString().padStart(2, '0');
+                const fSekunden = sekunden.toString().padStart(2, '0');
+
+                timer.innerText = `${fStunden}:${fMinuten}:${fSekunden}`;
+            });
+        }
+
+        // Jede Sekunde (1000 Millisekunden) die Timer aktualisieren
+        setInterval(updateLiveTimers, 1000);
+
+        // Beim ersten Start ausführen
         render();
     </script>
 </body>
