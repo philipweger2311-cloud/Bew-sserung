@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bewässerung</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            padding: 20px; 
+            background-color: #f8f9fa; 
+            margin: 0;
+        }
+        h1 { 
+            text-align: center; 
+            color: #333; 
+            margin-bottom: 20px;
+        }
+        .add-container { 
+            display: flex; 
+            margin-bottom: 30px; 
+            gap: 10px; 
+        }
+        input[type="text"] { 
+            flex: 1; 
+            padding: 15px; 
+            font-size: 16px; 
+            border: 1px solid #ccc; 
+            border-radius: 8px; 
+        }
+        button.add-btn { 
+            padding: 15px 20px; 
+            font-size: 16px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: bold;
+        }
+        .wiese-item {
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            padding: 25px 20px; 
+            margin-bottom: 15px; 
+            border-radius: 12px;
+            color: white; 
+            font-weight: bold; 
+            font-size: 20px; 
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background-color 0.2s ease;
+        }
+        .wiese-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .timer-text {
+            font-size: 15px;
+            font-weight: normal;
+            opacity: 0.9;
+        }
+        /* Deine gewünschten Farben */
+        .status-aus { background-color: #808080; } /* Grau */
+        .status-an { background-color: #007bff; }  /* Blau */
+        
+        .delete-btn {
+            background-color: rgba(255, 255, 255, 0.2); 
+            border: none; 
+            color: white;
+            padding: 8px 12px; 
+            border-radius: 6px; 
+            cursor: pointer;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Bewässerungs-Status</h1>
+
+    <div class="add-container">
+        <input type="text" id="newWieseName" placeholder="Name der Wiese...">
+        <button class="add-btn" onclick="addWiese()">Neu</button>
+    </div>
+
+    <div id="wiesenListe"></div>
+
+    <script>
+        // Daten vom Handy laden oder leeres Array starten
+        let wiesen = JSON.parse(localStorage.getItem('bewaesserung_daten')) || [];
+
+        function speichern() {
+            localStorage.setItem('bewaesserung_daten', JSON.stringify(wiesen));
+            render();
+        }
+
+        function addWiese() {
+            const input = document.getElementById('newWieseName');
+            const name = input.value.trim();
+            if (name !== "") {
+                // startedAt speichert den Einschalt-Zeitpunkt
+                wiesen.push({ id: Date.now(), name: name, isOn: false, startedAt: null });
+                input.value = "";
+                speichern();
+            }
+        }
+
+        function toggleStatus(id) {
+            const wiese = wiesen.find(w => w.id === id);
+            if (wiese) {
+                wiese.isOn = !wiese.isOn;
+                // Wenn eingeschaltet wird, merken wir uns JETZT die Zeit. Wenn aus, löschen wir sie wieder.
+                wiese.startedAt = wiese.isOn ? Date.now() : null;
+                speichern();
+            }
+        }
+
+        function deleteWiese(event, id) {
+            event.stopPropagation(); 
+            if(confirm("Wiese wirklich löschen?")) {
+                wiesen = wiesen.filter(w => w.id !== id);
+                speichern();
+            }
+        }
+
+        function render() {
+            const liste = document.getElementById('wiesenListe');
+            liste.innerHTML = "";
+
+            wiesen.forEach(wiese => {
+                const div = document.createElement('div');
+                div.className = `wiese-item ${wiese.isOn ? 'status-an' : 'status-aus'}`;
+                div.onclick = () => toggleStatus(wiese.id);
+
+                // Container für Text und Timer untereinander
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'wiese-info';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.innerText = wiese.name;
+                infoDiv.appendChild(nameSpan);
+
+                const statusSpan = document.createElement('span');
+                statusSpan.className = 'timer-text';
+                
+                if (wiese.isOn && wiese.startedAt) {
+                    // Markierung für das Live-Update per JavaScript
+                    statusSpan.innerHTML = `AN • läuft seit: <span class="live-timer" data-start="${wiese.startedAt}">00:00:00</span>`;
+                } else {
+                    statusSpan.innerText = 'AUS';
+                }
+                infoDiv.appendChild(statusSpan);
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-btn';
+                delBtn.innerText = 'Löschen';
+                delBtn.onclick = (e) => deleteWiese(e, wiese.id);
+
+                div.appendChild(infoDiv);
+                div.appendChild(delBtn);
+                liste.appendChild(div);
+            });
+            
+            // Sofort einmal die Timer berechnen, falls welche aktiv sind
+            updateLiveTimers();
+        }
+
+        // Funktion, die sekündlich alle aktiven Timer hochzählt
+        function updateLiveTimers() {
+            const activeTimers = document.querySelectorAll('.live-timer');
+            activeTimers.forEach(timer => {
+                const startZeit = parseInt(timer.getAttribute('data-start'));
+                const jetzt = Date.now();
+                const unterschied = jetzt - startZeit;
+
+                // Umrechnung in Stunden, Minuten und Sekunden
+                const stunden = Math.floor(unterschied / 3600000);
+                const minuten = Math.floor((unterschied % 3600000) / 60000);
+                const sekunden = Math.floor((unterschied % 60000) / 1000);
+
+                // Schön formatieren mit führenden Nullen (z.B. 01:23:05)
+                const fStunden = stunden.toString().padStart(2, '0');
+                const fMinuten = minuten.toString().padStart(2, '0');
+                const fSekunden = sekunden.toString().padStart(2, '0');
+
+                timer.innerText = `${fStunden}:${fMinuten}:${fSekunden}`;
+            });
+        }
+
+        // Jede Sekunde (1000 Millisekunden) die Timer aktualisieren
+        setInterval(updateLiveTimers, 1000);
+
+        // Beim ersten Start ausführen
+        render();
+    </script>
+</body>
+</html>
